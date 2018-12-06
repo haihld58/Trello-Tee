@@ -50,8 +50,8 @@
                 })
             }
         }, {
-            key: "createCard", value: function (a, b, c, d) {
-                return jQuery.postAsObservable("https://api.trello.com/1/cards", {
+            key: "createCard", value: function (a, b, c, d, e) {
+                var card = jQuery.postAsObservable("https://api.trello.com/1/cards", {
                     idList: a,
                     name: b,
                     desc: c,
@@ -59,7 +59,27 @@
                     urlSource: d,
                     key: this.key,
                     token: this.token
-                })
+                });
+
+                var key = this.key,
+                    token = this.token;
+
+                if (typeof e !== "undefined" && e) {
+                    card.subscribe(function (card) {
+                        if (!card.hasError) {
+
+                            var cardId = card.data.id;
+
+                            jQuery.postAsObservable("https://api.trello.com/1/cards/" + cardId + "/attachments", {
+                                url: e,
+                                key: key,
+                                token: token
+                            });
+                        }
+                    })
+                }
+
+                return card;
             }
         }]), a
     }();
@@ -203,50 +223,50 @@
                 log.debug("TrelloChrome", "loadBoards"), this.loadBoardsRequest.onNext(!0)
             }
         }, {
-            key: "createCard", value: function (a, b, c, d) {
-                return this.api.createCard(a, b, c, d)
+            key: "createCard", value: function (a, b, c, d, e) {
+                return this.api.createCard(a, b, c, d, e)
             }
         }, {
-            key: "getListsForBoard", value: function (a) {
-                return this.api.getListsForBoard(a).map(function (a) {
-                    return a.data
-                }).map(function (a) {
-                    return a.map(function (a) {
-                        return _.extend(a, {name: _.escape(a.name)})
+                key: "getListsForBoard", value: function (a) {
+                    return this.api.getListsForBoard(a).map(function (a) {
+                        return a.data
+                    }).map(function (a) {
+                        return a.map(function (a) {
+                            return _.extend(a, {name: _.escape(a.name)})
+                        })
                     })
-                })
-            }
-        }, {
-            key: "getBoardsForQuery", value: function (a) {
-                return this.data.dataObservable().map(function (a) {
-                    return a.boards
-                }).map(function (b) {
-                    return b.map(function (b) {
-                        return b.score = b.name.score(a, .5), b
-                    }).filter(function (a) {
-                        return a.score > .4
-                    }).sort(function (a, b) {
-                        return b.score - a.score
+                }
+            }, {
+                key: "getBoardsForQuery", value: function (a) {
+                    return this.data.dataObservable().map(function (a) {
+                        return a.boards
+                    }).map(function (b) {
+                        return b.map(function (b) {
+                            return b.score = b.name.score(a, .5), b
+                        }).filter(function (a) {
+                            return a.score > .4
+                        }).sort(function (a, b) {
+                            return b.score - a.score
+                        })
                     })
-                })
-            }
-        }, {
-            key: "updateToken", value: function (a) {
-                this.data.updateToken(a)
-            }
-        }, {
-            key: "isLoggedIn", value: function () {
-                return null !== this.data.getData().token
-            }
-        }, {
-            key: "loggedInObservable", value: function () {
-                return this.data.dataObservable().map(function (a) {
-                    return null !== a.token
-                }).distinctUntilChanged().doOnNext(function (a) {
-                    return log.debug("TrelloChrome", "loggedInObservable", a)
-                })
-            }
-        }]), a
+                }
+            }, {
+                key: "updateToken", value: function (a) {
+                    this.data.updateToken(a)
+                }
+            }, {
+                key: "isLoggedIn", value: function () {
+                    return null !== this.data.getData().token
+                }
+            }, {
+                key: "loggedInObservable", value: function () {
+                    return this.data.dataObservable().map(function (a) {
+                        return null !== a.token
+                    }).distinctUntilChanged().doOnNext(function (a) {
+                        return log.debug("TrelloChrome", "loggedInObservable", a)
+                    })
+                }
+            }]), a
     }();
     a["default"] = i
 }), function (a, b) {
@@ -392,7 +412,10 @@
         var desc = document.getElementById('AdContentMessage'),
             listPlatforms = [],
             platforms = document.getElementsByClassName('platform-element'),
-            imageUrl = document.getElementById('adImage');
+            imageUrl = document.getElementById('adImage'),
+            poupAd = document.getElementsByClassName('modal-dialog AdDetailModal'),
+            title = '',
+            link = '';
 
         // get desc
         desc = desc ? desc.innerText : ''
@@ -411,7 +434,19 @@
         // get imageUrl
         imageUrl = imageUrl ? imageUrl.src : '';
 
-        return {desc, listPlatforms, imageUrl}
+        if (poupAd.length) {
+            var titleElement = document.getElementsByClassName('page-name'),
+                linkElement = document.getElementsByClassName('post-link');
+            if (titleElement.length) {
+                title = titleElement[0].innerText + ' - Posts - SpyBadass';
+            }
+
+            if (linkElement.length) {
+                link = linkElement[0].href;
+            }
+        }
+
+        return {title, link, desc, listPlatforms, imageUrl}
     }
 
     Object.defineProperty(a, "__esModule", {value: !0});
@@ -446,8 +481,10 @@
                     this.attachCurrentTabUrlSpan = $("#attach-current-tab-url"),
                     this.headerView = $("#header"),
                     this.imageUrl = '',
+                    this.linkAd = '',
                     chrome.tabs.getSelected(null, function (b) {
                         /^(f|ht)tps?:\/\//i.test(b.url) ? (a.currentTab = b, a.attachCurrentTabUrlSpan.text(a.currentTab.title)) : a.attachCurrentTabContainer.hide();
+                        console.log(b)
                     }), this.tchrome.loadBoards(), this.tchrome.dataObservable().subscribe(function (b) {
                     log.debug("PopupViewController", "setting data", b), a.boardSelectorVC.setOptions(b.boards, b.lastSelection.boardId)
                 }),
@@ -463,17 +500,19 @@
 
                             var desc = results[0].desc,
                                 listPlatforms = results[0].listPlatforms,
-                                imageUrl = results[0].imageUrl;
-
+                                imageUrl = results[0].imageUrl,
+                                titleAds = results[0].title,
+                                link = results[0].link;
 
                             //Here we have just the innerHTML and not DOM structure
                             a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
 
-                            var title = a.currentTab.title + (listPlatforms.length ? ' [' + listPlatforms + ']' : '');
+                            var title = (titleAds ? titleAds : a.currentTab.title) + (listPlatforms.length ? ' [' + listPlatforms + ']' : '');
 
                             a.nameTextArea.val(title);
                             a.descriptionTextArea.val(desc);
-                            a.imageUrl = imageUrl
+                            a.imageUrl = imageUrl;
+                            a.linkAd = link;
                         });
                     }),
 
@@ -502,15 +541,18 @@
 
                             var desc = results[0].desc,
                                 listPlatforms = results[0].listPlatforms,
-                                imageUrl = results[0].imageUrl;
+                                imageUrl = results[0].imageUrl,
+                                titleAds = results[0].title,
+                                link = results[0].link;
 
-                            a.imageUrl = imageUrl
+                            a.imageUrl = imageUrl;
+                            a.linkAd = link;
 
                             //Here we have just the innerHTML and not DOM structure
                             a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
 
                             var nameTextArea = a.nameTextArea.val(),
-                                title = nameTextArea + ' [' + listPlatforms + ']';
+                                title = (titleAds ? titleAds : nameTextArea) + ' [' + listPlatforms + ']';
 
                             a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.nameTextArea.val().length ? a.nameTextArea.val('') : a.nameTextArea.val(title)) : a.nameTextArea.val('')
                         });
@@ -546,18 +588,22 @@
             key: "confirmCardCreate", value: function () {
 
                 var a = this, b = this.nameTextArea.val(), c = this.descriptionTextArea.val(),
-                    d = this.attachCurrentTabCheckbox.is(":checked") ? (a.imageUrl ? a.imageUrl : this.currentTab.url) : null;
+                    d = this.attachCurrentTabCheckbox.is(":checked") ? (a.linkAd ? a.linkAd : this.currentTab.url) : null,
+                    g = this.attachCurrentTabCheckbox.is(":checked") ? a.imageUrl : null;
 
                 this.nameTextArea.val(""), this.descriptionTextArea.val(""), this.confirmButton.text("Creating..."), this.confirmButton.prop("disabled", !0), this.form.prop("disabled", !0), this.attachCurrentTabCheckbox.prop("checked", !1);
                 var e = this.listSelectorVC.getSelectedValue();
 
-                this.tchrome.createCard(e, b, c, d).subscribe(function (b) {
+                this.tchrome.createCard(e, b, c, d, g).subscribe(function (b) {
                     log.info("create card", b), a.confirmButton.text("Add");
+
                     var c = $("<li></li>").append($("<a></a>").attr("href", b.data.url).attr("target", "_blank").text(b.data.name));
                     a.createdCardsList.prepend(c)
+
                 }, function (a) {
                     log.info("unable to create card", a)
                 });
+
                 var f = this.boardSelectorVC.getSelectedValue();
                 this.tchrome.setLastSelection(f, e)
             }
