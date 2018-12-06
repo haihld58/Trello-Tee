@@ -469,7 +469,7 @@
                             //Here we have just the innerHTML and not DOM structure
                             a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
 
-                            var title = a.currentTab.title + ' [' + listPlatforms + ']';
+                            var title = a.currentTab.title + (listPlatforms.length ? ' [' + listPlatforms + ']' : '');
 
                             a.nameTextArea.val(title);
                             a.descriptionTextArea.val(desc);
