@@ -50,7 +50,7 @@
                 })
             }
         }, {
-            key: "createCard", value: function (a, b, c, d, e) {
+            key: "createCard", value: function (a, b, c, d, e, f) {
                 var card = jQuery.postAsObservable("https://api.trello.com/1/cards", {
                     idList: a,
                     name: b,
@@ -64,17 +64,27 @@
                 var key = this.key,
                     token = this.token;
 
-                if (typeof e !== "undefined" && e) {
+                if (typeof e !== "undefined" && e.length) {
                     card.subscribe(function (card) {
                         if (!card.hasError) {
 
                             var cardId = card.data.id;
 
-                            jQuery.postAsObservable("https://api.trello.com/1/cards/" + cardId + "/attachments", {
-                                url: e,
-                                key: key,
-                                token: token
-                            });
+                            for (var j = 0; j < e.length; j++) {
+                                jQuery.postAsObservable("https://api.trello.com/1/cards/" + cardId + "/attachments", {
+                                    url: e[j],
+                                    key: key,
+                                    token: token
+                                });
+                            }
+
+                            if (f) {
+                                jQuery.postAsObservable("https://api.trello.com/1/cards/" + cardId + "/actions/comments", {
+                                    text: f,
+                                    key: key,
+                                    token: token
+                                });
+                            }
                         }
                     })
                 }
@@ -223,50 +233,50 @@
                 log.debug("TrelloChrome", "loadBoards"), this.loadBoardsRequest.onNext(!0)
             }
         }, {
-            key: "createCard", value: function (a, b, c, d, e) {
-                return this.api.createCard(a, b, c, d, e)
+            key: "createCard", value: function (a, b, c, d, e, f) {
+                return this.api.createCard(a, b, c, d, e, f)
             }
         }, {
-                key: "getListsForBoard", value: function (a) {
-                    return this.api.getListsForBoard(a).map(function (a) {
-                        return a.data
-                    }).map(function (a) {
-                        return a.map(function (a) {
-                            return _.extend(a, {name: _.escape(a.name)})
-                        })
+            key: "getListsForBoard", value: function (a) {
+                return this.api.getListsForBoard(a).map(function (a) {
+                    return a.data
+                }).map(function (a) {
+                    return a.map(function (a) {
+                        return _.extend(a, {name: _.escape(a.name)})
                     })
-                }
-            }, {
-                key: "getBoardsForQuery", value: function (a) {
-                    return this.data.dataObservable().map(function (a) {
-                        return a.boards
-                    }).map(function (b) {
-                        return b.map(function (b) {
-                            return b.score = b.name.score(a, .5), b
-                        }).filter(function (a) {
-                            return a.score > .4
-                        }).sort(function (a, b) {
-                            return b.score - a.score
-                        })
+                })
+            }
+        }, {
+            key: "getBoardsForQuery", value: function (a) {
+                return this.data.dataObservable().map(function (a) {
+                    return a.boards
+                }).map(function (b) {
+                    return b.map(function (b) {
+                        return b.score = b.name.score(a, .5), b
+                    }).filter(function (a) {
+                        return a.score > .4
+                    }).sort(function (a, b) {
+                        return b.score - a.score
                     })
-                }
-            }, {
-                key: "updateToken", value: function (a) {
-                    this.data.updateToken(a)
-                }
-            }, {
-                key: "isLoggedIn", value: function () {
-                    return null !== this.data.getData().token
-                }
-            }, {
-                key: "loggedInObservable", value: function () {
-                    return this.data.dataObservable().map(function (a) {
-                        return null !== a.token
-                    }).distinctUntilChanged().doOnNext(function (a) {
-                        return log.debug("TrelloChrome", "loggedInObservable", a)
-                    })
-                }
-            }]), a
+                })
+            }
+        }, {
+            key: "updateToken", value: function (a) {
+                this.data.updateToken(a)
+            }
+        }, {
+            key: "isLoggedIn", value: function () {
+                return null !== this.data.getData().token
+            }
+        }, {
+            key: "loggedInObservable", value: function () {
+                return this.data.dataObservable().map(function (a) {
+                    return null !== a.token
+                }).distinctUntilChanged().doOnNext(function (a) {
+                    return log.debug("TrelloChrome", "loggedInObservable", a)
+                })
+            }
+        }]), a
     }();
     a["default"] = i
 }), function (a, b) {
@@ -482,6 +492,8 @@
                     this.headerView = $("#header"),
                     this.imageUrl = '',
                     this.linkAd = '',
+                    this.descriptionAd = '',
+                    this.attachments = [],
                     chrome.tabs.getSelected(null, function (b) {
                         /^(f|ht)tps?:\/\//i.test(b.url) ? (a.currentTab = b, a.attachCurrentTabUrlSpan.text(a.currentTab.title)) : a.attachCurrentTabContainer.hide();
                         console.log(b)
@@ -505,13 +517,16 @@
                                 link = results[0].link;
 
                             //Here we have just the innerHTML and not DOM structure
-                            a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
+                            // a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
 
                             var title = (titleAds ? titleAds : a.currentTab.title) + (listPlatforms.length ? ' [' + listPlatforms + ']' : '');
 
                             a.nameTextArea.val(title);
-                            a.descriptionTextArea.val(desc);
-                            a.imageUrl = imageUrl;
+                            // a.descriptionTextArea.val(desc);
+
+                            a.attachCurrentTabCheckbox.is(":checked") ? (a.descriptionAd = desc) : a.descriptionAd = ''
+
+                            imageUrl ? a.attachments.push(imageUrl) : (a.attachments = [])
                             a.linkAd = link;
                         });
                     }),
@@ -545,11 +560,13 @@
                                 titleAds = results[0].title,
                                 link = results[0].link;
 
-                            a.imageUrl = imageUrl;
                             a.linkAd = link;
 
+                            imageUrl ? a.attachments.push(imageUrl) : (a.attachments = [])
+
                             //Here we have just the innerHTML and not DOM structure
-                            a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
+                            a.attachCurrentTabCheckbox.is(":checked") ? (a.descriptionAd = desc) : a.descriptionAd = ''
+                            // a.attachCurrentTabCheckbox.is(":checked") ? (0 === a.descriptionTextArea.val().length ? a.descriptionTextArea.val(desc) : a.descriptionTextArea.val()) : a.descriptionTextArea.val('')
 
                             var nameTextArea = a.nameTextArea.val(),
                                 title = (titleAds ? titleAds : nameTextArea) + ' [' + listPlatforms + ']';
@@ -589,12 +606,25 @@
 
                 var a = this, b = this.nameTextArea.val(), c = this.descriptionTextArea.val(),
                     d = this.attachCurrentTabCheckbox.is(":checked") ? (a.linkAd ? a.linkAd : this.currentTab.url) : null,
-                    g = this.attachCurrentTabCheckbox.is(":checked") ? a.imageUrl : null;
+                    g = this.attachCurrentTabCheckbox.is(":checked") ? a.attachments : [],
+                    h = this.attachCurrentTabCheckbox.is(":checked") ? a.descriptionAd : '';
+
+                if (h) {
+                    var urls = h.match(/\bhttps?:\/\/\S+/gi);
+
+                    var uniqueUrls = urls.filter(function (item, pos, self) {
+                        return self.indexOf(item) === pos;
+                    })
+                }
+
+                if (uniqueUrls.length) {
+                    g = g.concat(uniqueUrls);
+                }
 
                 this.nameTextArea.val(""), this.descriptionTextArea.val(""), this.confirmButton.text("Creating..."), this.confirmButton.prop("disabled", !0), this.form.prop("disabled", !0), this.attachCurrentTabCheckbox.prop("checked", !1);
                 var e = this.listSelectorVC.getSelectedValue();
 
-                this.tchrome.createCard(e, b, c, d, g).subscribe(function (b) {
+                this.tchrome.createCard(e, b, c, d, g, h).subscribe(function (b) {
                     log.info("create card", b), a.confirmButton.text("Add");
 
                     var c = $("<li></li>").append($("<a></a>").attr("href", b.data.url).attr("target", "_blank").text(b.data.name));
